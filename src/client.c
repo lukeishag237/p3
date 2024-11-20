@@ -21,6 +21,45 @@ processing_args_t req_entries[100];
 */
 void * request_handle(void * img_file_path)
 {
+    char *file_path = (char*)img_file_path;
+    FILE *imgPath = fopen(file_path, "rb");
+    if (imgPath == NULL) {
+        perror("File open error within request_handle\n");
+        return NULL;
+    }
+    if (fseek(imgPath, 0, SEEK_END) != 0) {
+        perror("fseek error in request_handle\n");
+        fclose(imgPath);
+        return NULL;
+    }
+    long file_size = ftell(imgPath);
+    if (file_size == -1) {
+        perror("ftell error\n");
+        fclose(imgPath);
+        return NULL;
+    }
+    int file_size_int = file_size;
+    int fd = setup_connection(port);
+    // ; part 5 and part 6 same line?
+    if (send_file_to_server(fd, imgPath, file_size_int) < 0) {
+        perror("error sending to server\n");
+        fclose(imgPath);
+        close(fd);
+        return NULL;
+    }
+
+    char out_paths[2048];
+    sprintf(out_paths, "%s/%s", "output", file_path);
+
+    if (receive_file_from_server(fd, out_paths) < 0) { //double check all good, recieves image
+        perror("error receiving file froms server\n");
+        fclose(imgPath);
+        close(fd);
+        return NULL;
+    }
+
+    close(fd);
+    fclose(imgPath);
     return NULL;
 }
 
@@ -64,9 +103,13 @@ int main(int argc, char *argv[])
     /*TODO:  Intermediate Submission
     * 1. Get the input args --> (1) directory path (2) Server Port (3) output path
     */
-
+    char directory_path[strlen(argv[1])];
+    strcpy(directory_path, argv[1]);
+    port = atoi(argv[2]);
+    strcpy(output_path, argv[3]);
     /*TODO: Intermediate Submission
     * Call the directory_trav function to traverse the directory and send the images to the server
     */
+    directory_trav(directory_path);
     return 0;  
 }
