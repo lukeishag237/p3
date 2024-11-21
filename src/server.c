@@ -174,14 +174,13 @@ void * dispatch(void *thread_id)
   while (1) 
   {
     size_t file_size = 0;
-    request_detials_t request_details;
 
     /* TODO: Intermediate Submission
     *    Description:      Accept client connection
     *    Utility Function: int accept_connection(void)
     */
-    int client_fd;
-    if ((client_fd = accept_connection()) == -1) {
+    int client_fd = accept_connection();
+    if (client_fd < 0) {
       perror("Error in accept_connection()");
       continue;
     }
@@ -190,11 +189,13 @@ void * dispatch(void *thread_id)
     *    Description:      Get request from client
     *    Utility Function: char * get_request_server(int fd, size_t *filelength)
     */
-    char *filename;
-    if ((filename = get_request_server(client_fd, &file_size)) == NULL) {
+    char *incoming_buffer;
+    if ((incoming_buffer = get_request_server(client_fd, &file_size)) == NULL) {
+      perror("File could not be read. Request Ignored");
       close(client_fd);
       continue;
     }
+
 
    /* TODO
     *    Description:      Add the request into the queue
@@ -217,7 +218,9 @@ void * dispatch(void *thread_id)
       pthread_cond_wait(&req_queue_notfull, &request_queue_lock);
     }
     //4 - Not sure if i set this right?
-    req_entries[queue_tail].buffer = filename;  
+    req_entries[queue_tail].buffer = malloc(file_size); 
+    memcpy(req_entries[queue_tail].buffer,incoming_buffer,file_size);
+    free(incoming_buffer);
     req_entries[queue_tail].file_size = file_size;
     req_entries[queue_tail].file_descriptor = client_fd;
     //5
@@ -228,7 +231,7 @@ void * dispatch(void *thread_id)
     pthread_cond_signal(&req_queue_notempty);
     pthread_mutex_unlock(&request_queue_lock);
   }
-    // return NULL;
+    return NULL;
 }
 
 void * worker(void *thread_id) {
@@ -263,9 +266,9 @@ void * worker(void *thread_id) {
       pthread_cond_wait(&req_queue_notempty, &request_queue_lock);
     }
     //3?
-    char *image_buffer = req_entries[queue_head].buffer;
+    mybuf = req_entries[queue_head].buffer;
     fileSize = req_entries[queue_head].file_size;
-    int fd = req_entries[queue_head].file_descriptor;
+    fd = req_entries[queue_head].file_descriptor;
     //4
     queue_head = (queue_head + 1) % MAX_QUEUE_LEN;
     queue_len--;
@@ -278,7 +281,7 @@ void * worker(void *thread_id) {
     *    store the result into a typeof database_entry_t
     *    send the file to the client using send_file_to_client(int fd, char * buffer, int size)              
     */
-    database_entry_t matched_image = image_match(image_buffer, fileSize);
+    database_entry_t matched_image = image_match(mybuf, fileSize);
     send_file_to_client(fd, matched_image.buffer, matched_image.file_size);
 
     /* TODO
@@ -287,7 +290,10 @@ void * worker(void *thread_id) {
     *    parameters passed in: refer to write up
     */
     LogPrettyPrint(logfile, id, num_request, matched_image.file_name, matched_image.file_size);
-    num_request++;  //Where to declare this? printing requests needed
+    num_request++;  
+
+    close(fd);
+    free(mybuf);
   }
 
 }
@@ -387,5 +393,4 @@ int main(int argc , char *argv[])
   }
   fprintf(stderr, "SERVER DONE \n");  // will never be reached in SOLUTION
   fclose(logfile);//closing the log files
-
 }

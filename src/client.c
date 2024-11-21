@@ -27,21 +27,25 @@ void * request_handle(void * img_file_path)
         perror("File open error within request_handle\n");
         return NULL;
     }
+    
     if (fseek(imgPath, 0, SEEK_END) != 0) {
         perror("fseek error in request_handle\n");
         fclose(imgPath);
         return NULL;
     }
-    long file_size = ftell(imgPath);
+    size_t file_size = ftell(imgPath);
     if (file_size == -1) {
         perror("ftell error\n");
         fclose(imgPath);
         return NULL;
     }
-    int file_size_int = file_size;
+
+    rewind(imgPath);
+
     int fd = setup_connection(port);
+
     // ; part 5 and part 6 same line?
-    if (send_file_to_server(fd, imgPath, file_size_int) < 0) {
+    if (send_file_to_server(fd, imgPath, file_size) < 0) {
         perror("error sending to server\n");
         fclose(imgPath);
         close(fd);
@@ -49,7 +53,8 @@ void * request_handle(void * img_file_path)
     }
 
     char out_paths[2048];
-    sprintf(out_paths, "%s/%s", "output", file_path);
+    sprintf(out_paths, "%s/%s", output_path, file_path);
+    printf("%s\n",out_paths);
 
     if (receive_file_from_server(fd, out_paths) < 0) { //double check all good, recieves image
         perror("error receiving file froms server\n");
@@ -58,7 +63,6 @@ void * request_handle(void * img_file_path)
         return NULL;
     }
 
-    close(fd);
     fclose(imgPath);
     return NULL;
 }
